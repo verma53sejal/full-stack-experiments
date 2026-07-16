@@ -1,0 +1,20 @@
+{
+    "name":  "social-media-post-composer",
+    "version":  "1.0.0",
+    "private":  true,
+    "scripts":  {
+                    "start":  "vite",
+                    "build":  "vite",
+                    "preview":  "vite preview",
+                    "dev":  "vite"
+                },
+    "dependencies":  {
+                         "@vitejs/plugin-react":  "latest",
+                         "vite":  "latest",
+                         "react":  "latest",
+                         "react-dom":  "latest"
+                     },
+    "devDependencies":  {
+
+                        }
+}
