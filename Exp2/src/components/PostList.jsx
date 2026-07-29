@@ -1,19 +1,54 @@
-import { memo, useCallback } from 'react'
+import { memo, useCallback, useMemo } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { deletePost } from '../features/posts/postsSlice.js'
 import {
-  selectAllPosts,
-  selectLinkedInPosts,
   selectDraftPosts,
-  selectPublishedCount,
+  selectFacebookPosts,
+  selectInstagramPosts,
+  selectLinkedInPosts,
+  selectPublishedPosts,
+  selectTwitterPosts,
 } from '../features/posts/postsSelectors.js'
 
-function PostList() {
+const PostCard = memo(function PostCard({ post, onEdit, onDelete }) {
+  const handleEdit = useCallback(() => onEdit(post.id), [onEdit, post.id])
+  const handleDelete = useCallback(() => onDelete(post.id), [onDelete, post.id])
+
+  return (
+    <article className="post-card">
+      <div className="post-card__meta">
+        <div>
+          <h3>{post.title}</h3>
+          <div className="badges">
+            <span className={`badge badge--platform badge--${post.platform.toLowerCase()}`}>
+              {post.platform}
+            </span>
+            <span className={`badge badge--status badge--${post.draftStatus}`}>
+              {post.draftStatus}
+            </span>
+          </div>
+        </div>
+      </div>
+      <div className="post-card__actions">
+        <button type="button" className="secondary" onClick={handleEdit}>
+          Edit
+        </button>
+        <button type="button" onClick={handleDelete}>
+          Delete
+        </button>
+      </div>
+    </article>
+  )
+})
+
+function PostList({ posts, onEdit }) {
   const dispatch = useDispatch()
-  const allPosts = useSelector(selectAllPosts)
+  const twitterPosts = useSelector(selectTwitterPosts)
   const linkedInPosts = useSelector(selectLinkedInPosts)
+  const instagramPosts = useSelector(selectInstagramPosts)
+  const facebookPosts = useSelector(selectFacebookPosts)
   const draftPosts = useSelector(selectDraftPosts)
-  const publishedCount = useSelector(selectPublishedCount)
+  const publishedPosts = useSelector(selectPublishedPosts)
 
   const handleDelete = useCallback(
     (id) => {
@@ -22,71 +57,51 @@ function PostList() {
     [dispatch],
   )
 
+  const sectionData = useMemo(
+    () => [
+      { title: 'Twitter Posts', items: twitterPosts },
+      { title: 'LinkedIn Posts', items: linkedInPosts },
+      { title: 'Instagram Posts', items: instagramPosts },
+      { title: 'Facebook Posts', items: facebookPosts },
+      { title: 'Draft Posts', items: draftPosts },
+      { title: 'Published Posts', items: publishedPosts },
+    ],
+    [draftPosts, facebookPosts, instagramPosts, linkedInPosts, publishedPosts, twitterPosts],
+  )
+
+  const renderPostList = useCallback(
+    (items) =>
+      items.length === 0 ? (
+        <p className="empty-state">No posts available.</p>
+      ) : (
+        <div className="posts-grid">
+          {items.map((post) => (
+            <PostCard key={post.id} post={post} onEdit={onEdit} onDelete={handleDelete} />
+          ))}
+        </div>
+      ),
+    [handleDelete, onEdit],
+  )
+
   return (
-    <section className="post-list">
-      <div className="summary">
-        <h2>Posts Summary</h2>
-        <p>All posts: {allPosts.length}</p>
-        <p>LinkedIn posts: {linkedInPosts.length}</p>
-        <p>Draft posts: {draftPosts.length}</p>
-        <p>Published count: {publishedCount}</p>
+    <div className="post-list">
+      <section className="all-posts-section">
+        <h2>Filtered Posts</h2>
+        {renderPostList(posts)}
+      </section>
+
+      <div className="group-sections">
+        {sectionData.map((section) => (
+          <section key={section.title} className="group-section">
+            <div className="group-section__header">
+              <h3>{section.title}</h3>
+              <span>{section.items.length}</span>
+            </div>
+            {renderPostList(section.items)}
+          </section>
+        ))}
       </div>
-
-      <div className="post-groups">
-        <div className="group">
-          <h3>All Posts</h3>
-          {allPosts.length === 0 ? (
-            <p>No posts yet.</p>
-          ) : (
-            <ul>
-              {allPosts.map((post) => (
-                <li key={post.id}>
-                  <strong>{post.title}</strong>
-                  <span>{post.platform}</span>
-                  <span>{post.draftStatus}</span>
-                  <button type="button" onClick={() => handleDelete(post.id)}>
-                    Delete
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        <div className="group">
-          <h3>LinkedIn Posts</h3>
-          {linkedInPosts.length === 0 ? (
-            <p>No LinkedIn posts.</p>
-          ) : (
-            <ul>
-              {linkedInPosts.map((post) => (
-                <li key={post.id}>
-                  <strong>{post.title}</strong>
-                  <span>{post.platform}</span>
-                  <span>{post.draftStatus}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        <div className="group">
-          <h3>Draft Posts</h3>
-          {draftPosts.length === 0 ? (
-            <p>No drafts.</p>
-          ) : (
-            <ul>
-              {draftPosts.map((post) => (
-                <li key={post.id}>
-                  <strong>{post.title}</strong>
-                  <span>{post.platform}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </div>
-    </section>
+    </div>
   )
 }
 

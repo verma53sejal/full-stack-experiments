@@ -1,13 +1,16 @@
 import { createSelector } from '@reduxjs/toolkit'
 
-const selectPostsState = (state) => state.posts
+export const selectPostsState = (state) => state.posts
 
 export const selectAllPostIds = createSelector(
   selectPostsState,
   (posts) => posts.allIds,
 )
 
-export const selectPostById = (state, postId) => state.posts.byId[postId]
+export const selectPostById = createSelector(
+  [selectPostsState, (_, postId) => postId],
+  (posts, postId) => (postId ? posts.byId[postId] : undefined),
+)
 
 export const selectAllPosts = createSelector(
   selectPostsState,
@@ -24,6 +27,11 @@ export const selectPublishedPosts = createSelector(
   (posts) => posts.filter((post) => post.draftStatus === 'published'),
 )
 
+export const selectPostsByPlatform = (platform) =>
+  createSelector(selectAllPosts, (posts) =>
+    posts.filter((post) => post.platform === platform),
+  )
+
 export const selectLinkedInPosts = createSelector(
   selectAllPosts,
   (posts) => posts.filter((post) => post.platform === 'LinkedIn'),
@@ -32,6 +40,16 @@ export const selectLinkedInPosts = createSelector(
 export const selectTwitterPosts = createSelector(
   selectAllPosts,
   (posts) => posts.filter((post) => post.platform === 'Twitter'),
+)
+
+export const selectInstagramPosts = createSelector(
+  selectAllPosts,
+  (posts) => posts.filter((post) => post.platform === 'Instagram'),
+)
+
+export const selectFacebookPosts = createSelector(
+  selectAllPosts,
+  (posts) => posts.filter((post) => post.platform === 'Facebook'),
 )
 
 export const selectPostCount = createSelector(
@@ -63,3 +81,50 @@ export const selectPlatformCounts = createSelector(selectAllPosts, (posts) =>
     },
   ),
 )
+
+export const selectPostsGroupedByPlatform = createSelector(
+  selectAllPosts,
+  (posts) =>
+    posts.reduce((groups, post) => {
+      if (!groups[post.platform]) {
+        groups[post.platform] = []
+      }
+      groups[post.platform].push(post)
+      return groups
+    }, {}),
+)
+
+export const selectFilteredSortedPosts = (search, platform, status, sortBy) =>
+  createSelector(selectAllPosts, (posts) => {
+
+    const normalizedSearch = (search || '').trim().toLowerCase()
+
+    const filteredPosts = posts.filter((post) => {
+      const matchesSearch = normalizedSearch
+        ? post.title.toLowerCase().includes(normalizedSearch)
+        : true
+
+      const matchesPlatform = platform && platform !== 'All' ? post.platform === platform : true
+
+      const matchesStatus =
+        status && status !== 'All'
+          ? status.toLowerCase() === 'draft'
+            ? post.draftStatus === 'draft'
+            : post.draftStatus === 'published'
+          : true
+
+      return matchesSearch && matchesPlatform && matchesStatus
+    })
+
+    return [...filteredPosts].sort((a, b) => {
+      const getValue = (item) => {
+        if (sortBy === 'platform') return item.platform
+        if (sortBy === 'status') return item.draftStatus
+        return item.title
+      }
+
+      const aValue = getValue(a).toLowerCase()
+      const bValue = getValue(b).toLowerCase()
+      return aValue.localeCompare(bValue)
+    })
+  })
