@@ -1,48 +1,516 @@
-import { useCallback, useMemo, useState } from 'react'
-import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react'
-import Header from './components/Header'
-import TogglePanel from './components/TogglePanel'
-import CalendarBoard from './components/CalendarBoard'
-import Agenda from './components/Agenda'
-import EventModal from './components/EventModal'
-import RenderMonitor from './components/RenderMonitor'
-import Clock from './components/Clock'
-import { filterEvents, sortByTime } from './utils/filterEvents'
-import './styles/app.css'
-import './styles/calendar.css'
-import './styles/monitor.css'
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useRenderTracker } from './useRenderTracker';
 
-const days = [{ name: 'Mon', date: '08' }, { name: 'Tue', date: '09' }, { name: 'Wed', date: '10' }, { name: 'Thu', date: '11' }, { name: 'Fri', date: '12' }, { name: 'Sat', date: '13' }, { name: 'Sun', date: '14' }]
-const seedEvents = [
-  { id: 'standup', day: 'Mon', time: '09:00', title: 'Product stand-up', category: 'Meeting', description: 'Align on the launch path and unblock the team.' },
-  { id: 'deep-work', day: 'Mon', time: '11:30', title: 'Deep work block', category: 'Focus', description: 'Protected time for the new calendar experience.' },
-  { id: 'dinner', day: 'Mon', time: '18:30', title: 'Dinner with Maya', category: 'Personal', description: 'A relaxed evening away from the desk.' },
-  { id: 'critique', day: 'Tue', time: '10:00', title: 'Design critique', category: 'Meeting', description: 'Review the latest interaction patterns.' },
-  { id: 'report', day: 'Wed', time: '13:00', title: 'Quarterly report', category: 'Deadline', description: 'Final review before the report goes out.' },
-  { id: 'research', day: 'Thu', time: '09:30', title: 'User research', category: 'Focus', description: 'Synthesize this week\'s customer conversations.' },
-  { id: 'demo', day: 'Fri', time: '15:00', title: 'Release demo', category: 'Meeting', description: 'Share the finished workflow with the wider team.' },
-]
-const initialStats = { total: 1, cards: 7, hits: 0, callbacks: 1, maxEventRenders: 1 }
+const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const categoryOptions = ['All', 'Meeting', 'Deadline', 'Focus', 'Personal'];
+const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-function App() {
-  const [events, setEvents] = useState(seedEvents)
-  const [settings, setSettings] = useState({ memo: true, callback: true, memoize: true, clock: true })
-  const [activeCategory, setActiveCategory] = useState('All')
-  const [selectedEvent, setSelectedEvent] = useState(null)
-  const [stats, setStats] = useState(initialStats)
-  const [, setEventRenders] = useState(Object.fromEntries(seedEvents.map((event) => [event.id, 1])))
-  const filteredEvents = useMemo(() => { if (settings.memoize) console.log('Filtering events...'); return filterEvents(events, activeCategory) }, [events, activeCategory, settings.memoize])
-  const agenda = useMemo(() => sortByTime(filteredEvents.filter((event) => event.day === 'Mon')), [filteredEvents])
-  const handleToggle = (key) => setSettings((current) => ({ ...current, [key]: !current[key] }))
-  const recordRender = useCallback((id) => { setStats((current) => ({ ...current, total: current.total + 1, cards: current.cards + 1, hits: settings.memo ? current.hits + 1 : current.hits, maxEventRenders: current.maxEventRenders + 1 })); setEventRenders((current) => ({ ...current, [id]: (current[id] || 0) + 1 })) }, [settings.memo])
-  const handleDragStart = useCallback((dragEvent, event) => { dragEvent.dataTransfer.setData('eventId', event.id); console.log('Drag handler created') }, [])
-  const handleDrop = useCallback((dropEvent, day) => { const id = dropEvent.dataTransfer.getData('eventId'); setEvents((current) => current.map((event) => event.id === id ? { ...event, day } : event)) }, [])
-  const resetStats = () => { setStats(initialStats); setEventRenders(Object.fromEntries(events.map((event) => [event.id, 0]))) }
-  const editEvent = () => { if (selectedEvent) { setEvents((current) => current.map((event) => event.id === selectedEvent.id ? { ...event, title: `${event.title} · Edited` } : event)); setSelectedEvent(null) } }
+const initialEvents = [
+  { id: 'monday-design-review', title: 'Design Review', time: '10:00', day: 'Monday', category: 'Meeting' },
+  { id: 'monday-ship-v2', title: 'Ship v2.3', time: '16:00', day: 'Monday', category: 'Deadline' },
+  { id: 'tuesday-sam', title: '1:1 with Sam', time: '09:30', day: 'Tuesday', category: 'Meeting' },
+  { id: 'wednesday-proposal', title: 'Write Proposal', time: '13:00', day: 'Wednesday', category: 'Focus' },
+  { id: 'thursday-demo', title: 'Client Demo', time: '15:00', day: 'Thursday', category: 'Meeting' },
+  { id: 'thursday-portfolio', title: 'Portfolio Review', time: '18:00', day: 'Thursday', category: 'Focus' },
+  { id: 'saturday-grocery', title: 'Grocery Run', time: '10:00', day: 'Saturday', category: 'Personal' },
+  { id: 'sunday-sprint', title: 'Sprint Planning', time: '11:00', day: 'Sunday', category: 'Meeting' },
+];
 
+const categoryClassMap = {
+  Meeting: 'meeting',
+  Deadline: 'deadline',
+  Focus: 'focus',
+  Personal: 'personal',
+};
+
+const filterEvents = (events, selectedCategory) => {
+  if (selectedCategory === 'All') return events;
+  return events.filter((event) => event.category === selectedCategory);
+};
+
+const areEventListsEqual = (left, right) => {
+  if (!left || !right) return left === right;
+  if (left.length !== right.length) return false;
+  return left.every((event, index) => event.id === right[index].id && event.day === right[index].day && event.category === right[index].category);
+};
+
+const formatClock = (date) =>
+  new Intl.DateTimeFormat('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).format(date);
+
+const getCalendarDays = (monthDate) => {
+  const firstDay = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
+  const startOffset = (firstDay.getDay() + 6) % 7;
+  const gridStart = new Date(firstDay);
+  gridStart.setDate(firstDay.getDate() - startOffset);
+
+  const days = [];
+  for (let i = 0; i < 42; i += 1) {
+    const date = new Date(gridStart);
+    date.setDate(gridStart.getDate() + i);
+    days.push(date);
+  }
+
+  return days;
+};
+
+const TogglePanel = ({ optimization, onToggle }) => (
+  <div className="toggle-panel">
+    {[
+      { key: 'reactMemo', label: 'React.memo Optimization' },
+      { key: 'useCallback', label: 'useCallback Optimization' },
+      { key: 'useMemo', label: 'useMemo Optimization' },
+      { key: 'liveClock', label: 'Live Clock Simulation' },
+    ].map((item) => (
+      <button
+        key={item.key}
+        type="button"
+        className={`toggle-pill ${optimization[item.key] ? 'active' : ''}`}
+        onClick={() => onToggle(item.key)}
+        aria-pressed={optimization[item.key]}
+      >
+        <span className="toggle-dot" />
+        <span>{item.label}</span>
+      </button>
+    ))}
+  </div>
+);
+
+const CategoryFilter = ({ selectedCategory, onSelect }) => (
+  <div className="category-filter" aria-label="Category filters">
+    {categoryOptions.map((category) => (
+      <button
+        key={category}
+        type="button"
+        className={`filter-pill ${selectedCategory === category ? 'selected' : ''}`}
+        onClick={() => onSelect(category)}
+      >
+        {category}
+      </button>
+    ))}
+  </div>
+);
+
+function EventCardBase({ event, onCardClick, onDragStart, onDragEnd, isDragging }) {
   return (
-    <main className="app-shell"><Header clock={<Clock enabled={settings.clock} />} /><TogglePanel settings={settings} onToggle={handleToggle} onReset={resetStats} /><div className="workspace"><div className="content-column"><div className="week-nav"><button className="icon-button"><ChevronLeft size={18} /></button><span><Calendar size={16} /> Week 37 <b>·</b> September 2025</span><button className="icon-button"><ChevronRight size={18} /></button></div><CalendarBoard days={days} events={settings.memo ? filteredEvents : events} activeCategory={activeCategory} onCategoryChange={setActiveCategory} onDrop={handleDrop} onSelect={setSelectedEvent} onDragStart={handleDragStart} onRender={recordRender} renderVersion={settings.memo ? 0 : stats.total} /><Agenda events={agenda} /></div><RenderMonitor stats={stats} events={events} /></div><EventModal event={selectedEvent} onClose={() => setSelectedEvent(null)} onEdit={editEvent} /></main>
-  )
+    <article
+      className={`event-card ${categoryClassMap[event.category] || 'default'} ${isDragging ? 'dragging' : ''}`}
+      draggable
+      onDragStart={(dragEvent) => {
+        dragEvent.dataTransfer.effectAllowed = 'move';
+        dragEvent.dataTransfer.setData('text/plain', event.id);
+        onDragStart(event.id);
+      }}
+      onDragEnd={onDragEnd}
+      onClick={() => onCardClick(event)}
+      aria-label={`${event.title} on ${event.day}`}
+    >
+      <div className="event-topline">
+        <span>{event.time}</span>
+        <span className="event-badge">{event.category}</span>
+      </div>
+      <h4>{event.title}</h4>
+    </article>
+  );
 }
 
-export default App
+const compareEventCardProps = (prevProps, nextProps) => {
+  const prevEvent = prevProps.event;
+  const nextEvent = nextProps.event;
+
+  return (
+    prevEvent.id === nextEvent.id &&
+    prevEvent.day === nextEvent.day &&
+    prevEvent.time === nextEvent.time &&
+    prevEvent.category === nextEvent.category &&
+    prevProps.onDragStart === nextProps.onDragStart &&
+    prevProps.isDragging === nextProps.isDragging
+  );
+};
+
+const EventCard = memo(EventCardBase, compareEventCardProps);
+
+const DayColumn = ({ day, events, onDrop, onDragStart, onDragEnd, onCardClick, reactMemoEnabled, draggingEventId }) => {
+  const handleDrop = (event) => {
+    event.preventDefault();
+    onDrop(day);
+  };
+
+  const handleEventDragStart = useCallback((eventId) => {
+    onDragStart(eventId);
+  }, [onDragStart]);
+
+  const EventCardComponent = reactMemoEnabled ? EventCard : EventCardBase;
+
+  return (
+    <div className="day-column" onDragOver={(event) => event.preventDefault()} onDrop={handleDrop}>
+      <div className="day-header sticky-header">
+        <span>{day}</span>
+      </div>
+      <div className="day-events">
+        {events.length > 0 ? (
+          events.map((event) => (
+            <EventCardComponent
+              key={event.id}
+              event={event}
+              onCardClick={onCardClick}
+              onDragStart={handleEventDragStart}
+              onDragEnd={onDragEnd}
+              isDragging={draggingEventId === event.id}
+            />
+          ))
+        ) : (
+          <div className="empty-day">No events</div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const CalendarBoard = ({ events, onCardClick, onDrop, onDragStart, onDragEnd, reactMemoEnabled, draggingEventId }) => (
+  <div className="calendar-board" aria-label="Weekly schedule">
+    {dayOrder.map((day) => (
+      <DayColumn
+        key={day}
+        day={day}
+        events={events.filter((event) => event.day === day)}
+        onDrop={onDrop}
+        onDragStart={onDragStart}
+        onDragEnd={onDragEnd}
+        onCardClick={onCardClick}
+        reactMemoEnabled={reactMemoEnabled}
+        draggingEventId={draggingEventId}
+      />
+    ))}
+  </div>
+);
+
+const RenderMonitor = ({ stats }) => {
+  const renderEntries = Object.entries(stats.eventRenderCounts || {}).sort((a, b) => b[1] - a[1]);
+  const maxValue = Math.max(1, ...renderEntries.map(([, value]) => value));
+
+  return (
+    <div className="render-monitor card-panel">
+      <div className="section-title-row">
+        <h3>Render Monitor</h3>
+      </div>
+
+      <div className="stats-grid">
+        <div className="stat-box">
+          <span>Total Renders</span>
+          <strong>{stats.totalRenders}</strong>
+        </div>
+        <div className="stat-box">
+          <span>Cards Rendered</span>
+          <strong>{`${stats.cardsRendered}/8`}</strong>
+        </div>
+        <div className="stat-box">
+          <span>Memo Cache Hits</span>
+          <strong>{stats.memoCacheHits}</strong>
+        </div>
+        <div className="stat-box">
+          <span>Callback Recreations</span>
+          <strong>{stats.callbackRecreations}</strong>
+        </div>
+      </div>
+
+      <div className="render-list">
+        {renderEntries.length > 0 ? (
+          renderEntries.map(([eventId, count]) => (
+            <div className="render-row" key={eventId}>
+              <div className="render-row-label">
+                <span>{eventId}</span>
+                <strong>{count}</strong>
+              </div>
+              <div className="progress-bar">
+                <span style={{ width: `${(count / maxValue) * 100}%` }} />
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="empty-list">No render activity yet.</div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const MonthlyCalendar = ({ currentMonth, onMonthChange, today }) => {
+  const monthDays = getCalendarDays(currentMonth);
+
+  return (
+    <div className="monthly-card card-panel">
+      <div className="month-header">
+        <button type="button" onClick={() => onMonthChange(-1)} aria-label="Previous month">
+          ‹
+        </button>
+        <h3>{monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}</h3>
+        <button type="button" onClick={() => onMonthChange(1)} aria-label="Next month">
+          ›
+        </button>
+      </div>
+
+      <div className="mini-weekdays">
+        {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((label) => (
+          <span key={label}>{label}</span>
+        ))}
+      </div>
+
+      <div className="mini-grid">
+        {monthDays.map((date, index) => {
+          const isCurrentMonth = date.getMonth() === currentMonth.getMonth();
+          const isToday =
+            date.getDate() === today.getDate() &&
+            date.getMonth() === today.getMonth() &&
+            date.getFullYear() === today.getFullYear();
+
+          return (
+            <span
+              key={`${date.toISOString()}-${index}`}
+              className={`mini-day ${isCurrentMonth ? '' : 'muted'} ${isToday ? 'today' : ''}`}
+            >
+              {date.getDate()}
+            </span>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+const EventModal = ({ event, onClose }) => {
+  if (!event) return null;
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="event-modal" onClick={(clickEvent) => clickEvent.stopPropagation()}>
+        <button type="button" className="close-modal" onClick={onClose} aria-label="Close event details">
+          ×
+        </button>
+        <div className="modal-badge">{event.category}</div>
+        <h2>{event.title}</h2>
+        <div className="modal-meta">
+          <span>Time: {event.time}</span>
+          <span>Day: {event.day}</span>
+          <span>Category: {event.category}</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+function App() {
+  const [events, setEvents] = useState(initialEvents);
+  const [selectedEvent, setSelectedEvent] = useState(null);
+  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [draggedEventId, setDraggedEventId] = useState(null);
+  const [currentMonth, setCurrentMonth] = useState(new Date(2026, 8, 1));
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [optimization, setOptimization] = useState({
+    reactMemo: false,
+    useCallback: false,
+    useMemo: false,
+    liveClock: true,
+  });
+
+  const { stats, applyRenderDelta, addMemoCacheHit, addCallbackRecreation, resetStats } = useRenderTracker();
+  const previousVisibleEventsRef = useRef(filterEvents(initialEvents, 'All'));
+  const useCallbackEnabledRef = useRef(false);
+
+  const handleToggle = (key) => {
+    setOptimization((previousState) => {
+      const nextState = { ...previousState, [key]: !previousState[key] };
+
+      if (key === 'useCallback' && nextState.useCallback && !useCallbackEnabledRef.current) {
+        addCallbackRecreation();
+        useCallbackEnabledRef.current = true;
+      }
+
+      if (key === 'useCallback' && !nextState.useCallback) {
+        useCallbackEnabledRef.current = false;
+      }
+
+      return nextState;
+    });
+  };
+
+  const handleOpenEvent = useCallback((event) => {
+    if (draggedEventId) return;
+    setSelectedEvent(event);
+  }, [draggedEventId]);
+
+  const handleCloseEvent = useCallback(() => {
+    setSelectedEvent(null);
+  }, []);
+
+  const handleResetStats = useCallback(() => {
+    resetStats();
+    setSelectedEvent(null);
+    previousVisibleEventsRef.current = filterEvents(events, selectedCategory);
+    useCallbackEnabledRef.current = optimization.useCallback;
+  }, [events, optimization.useCallback, resetStats, selectedCategory]);
+
+  const handleFilterSelect = useCallback((category) => {
+    const nextVisibleEvents = filterEvents(events, category);
+
+    if (optimization.useMemo && areEventListsEqual(previousVisibleEventsRef.current, nextVisibleEvents)) {
+      addMemoCacheHit();
+    }
+
+    if (optimization.useMemo) {
+      previousVisibleEventsRef.current = nextVisibleEvents;
+    }
+
+    setSelectedCategory(category);
+    applyRenderDelta('filter', optimization.reactMemo, filterEvents(events, category).map((event) => event.id));
+  }, [addMemoCacheHit, applyRenderDelta, events, optimization.reactMemo, optimization.useMemo]);
+
+  const handleDragStart = useCallback((eventId) => {
+    setDraggedEventId(eventId);
+  }, []);
+
+  const handleDragEnd = useCallback(() => {
+    setDraggedEventId(null);
+  }, []);
+
+  const handleDropOnDay = useCallback((day) => {
+    if (!draggedEventId) return;
+
+    const sourceEvent = events.find((entry) => entry.id === draggedEventId);
+    if (!sourceEvent) {
+      setDraggedEventId(null);
+      return;
+    }
+
+    if (sourceEvent.day === day) {
+      setDraggedEventId(null);
+      return;
+    }
+
+    const nextEvents = events.map((entry) => (entry.id === draggedEventId ? { ...entry, day } : entry));
+    const nextVisibleEvents = filterEvents(nextEvents, selectedCategory);
+
+    if (optimization.useMemo && areEventListsEqual(previousVisibleEventsRef.current, nextVisibleEvents)) {
+      addMemoCacheHit();
+    }
+
+    if (optimization.useMemo) {
+      previousVisibleEventsRef.current = nextVisibleEvents;
+    }
+
+    setEvents(nextEvents);
+    setDraggedEventId(null);
+
+    const renderedEventIds = optimization.reactMemo
+      ? [draggedEventId]
+      : nextVisibleEvents.map((event) => event.id);
+
+    applyRenderDelta('drag', optimization.reactMemo, renderedEventIds);
+  }, [addMemoCacheHit, applyRenderDelta, draggedEventId, events, optimization.reactMemo, optimization.useMemo, selectedCategory]);
+
+  useEffect(() => {
+    if (optimization.liveClock) {
+      const timer = setInterval(() => {
+        setCurrentTime(new Date());
+      }, 450);
+
+      return () => clearInterval(timer);
+    }
+    return undefined;
+  }, [optimization.liveClock]);
+
+  const memoizedEvents = useMemo(() => filterEvents(events, selectedCategory), [events, selectedCategory]);
+  const visibleEvents = optimization.useMemo ? memoizedEvents : filterEvents(events, selectedCategory);
+
+  useEffect(() => {
+    if (selectedEvent && !events.some((event) => event.id === selectedEvent.id)) {
+      setSelectedEvent(null);
+    }
+  }, [events, selectedEvent]);
+
+  return (
+    <div className="app-shell">
+      <header className="top-header">
+        <div className="title-block">
+          <div className="eyebrow">Experiment 1.4</div>
+          <h1>Interactive Calendar Scheduler</h1>
+          <p>Schedule and optimize weekly posts with React rendering insights.</p>
+        </div>
+
+        <div className="header-actions">
+          <div className="digital-clock" aria-live="polite">
+            {formatClock(currentTime)}
+          </div>
+          <button type="button" className="reset-button" onClick={handleResetStats}>
+            Reset Render Stats
+          </button>
+        </div>
+      </header>
+
+      <section className="controls-panel card-panel">
+        <TogglePanel optimization={optimization} onToggle={handleToggle} />
+      </section>
+
+      <div className="workspace-grid">
+        <aside className="left-sidebar">
+          <MonthlyCalendar
+            currentMonth={currentMonth}
+            onMonthChange={(direction) =>
+              setCurrentMonth(
+                new Date(currentMonth.getFullYear(), currentMonth.getMonth() + direction, 1),
+              )
+            }
+            today={new Date()}
+          />
+
+          <div className="upcoming-card card-panel">
+            <div className="section-title-row">
+              <h3>Upcoming Tasks</h3>
+            </div>
+            <ul className="task-list">
+              {visibleEvents.slice(0, 5).map((event) => (
+                <li key={event.id}>
+                  <span className={`task-dot ${categoryClassMap[event.category] || 'default'}`} />
+                  <div>
+                    <strong>{event.title}</strong>
+                    <small>
+                      {event.day} · {event.time}
+                    </small>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </aside>
+
+        <main className="main-calendar">
+          <div className="calendar-toolbar card-panel">
+            <CategoryFilter selectedCategory={selectedCategory} onSelect={handleFilterSelect} />
+          </div>
+
+          <CalendarBoard
+            events={visibleEvents}
+            onCardClick={handleOpenEvent}
+            onDrop={handleDropOnDay}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+            reactMemoEnabled={optimization.reactMemo}
+            draggingEventId={draggedEventId}
+          />
+        </main>
+
+        <aside className="right-sidebar">
+          <RenderMonitor stats={stats} />
+        </aside>
+      </div>
+
+      <EventModal event={selectedEvent} onClose={handleCloseEvent} />
+    </div>
+  );
+}
+
+export default App;
