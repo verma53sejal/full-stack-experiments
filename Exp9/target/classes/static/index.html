@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#101522">
+    <title>CI/CD Demo Dashboard</title>
+    <link rel="stylesheet" href="/style.css">
+    <script src="/script.js" defer></script>
+</head>
+<body>
+    <div class="page-shell">
+        <header class="topbar">
+            <a class="brand" href="/" aria-label="CI/CD Demo home">
+                <span class="brand-mark" aria-hidden="true">&lt;/&gt;</span>
+                <span>ci-cd-demo</span>
+            </a>
+            <div class="topbar-actions">
+                <span class="connection"><span class="connection-dot"></span> Local application</span>
+                <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Switch to light theme">
+                    <span aria-hidden="true">☼</span>
+                    <span class="theme-label">Light mode</span>
+                </button>
+            </div>
+        </header>
+
+        <main>
+            <section class="hero">
+                <div class="hero-copy">
+                    <span class="eyebrow"><span class="eyebrow-dot"></span> EXPERIMENT 3.2.1</span>
+                    <h1>CI/CD Demo <span>Dashboard</span></h1>
+                    <p>A simple window into your Spring Boot application. Try an endpoint and see the response right here.</p>
+                </div>
+                <div class="hero-badge" aria-label="Java 17 and Spring Boot">
+                    <span class="badge-icon" aria-hidden="true">✦</span>
+                    <span><strong>Java 17</strong><small>Spring Boot</small></span>
+                </div>
+            </section>
+
+            <section class="api-section" aria-labelledby="api-heading">
+                <div class="section-heading">
+                    <div>
+                        <span class="section-kicker">LIVE CONNECTION</span>
+                        <h2 id="api-heading">Try the API</h2>
+                    </div>
+                    <span class="section-note"><span class="pulse-dot"></span> Served from this application</span>
+                </div>
+
+                <div class="api-grid">
+                    <article class="api-card hello-card">
+                        <div class="card-topline">
+                            <span class="api-icon hello-icon" aria-hidden="true">↗</span>
+                            <span class="method-pill">GET</span>
+                        </div>
+                        <h3>Hello API</h3>
+                        <code class="endpoint">/api/hello</code>
+                        <p class="card-description">Get a friendly greeting from the application.</p>
+                        <button class="action-button" id="hello-button" type="button">
+                            <span>Call hello endpoint</span><span aria-hidden="true">→</span>
+                        </button>
+                        <div class="response-panel" id="hello-response" aria-live="polite">
+                            <div class="response-heading"><span class="response-dot"></span> RESPONSE</div>
+                            <p class="response-placeholder">Your response will appear here.</p>
+                        </div>
+                    </article>
+
+                    <article class="api-card status-card">
+                        <div class="card-topline">
+                            <span class="api-icon status-icon" aria-hidden="true">⌁</span>
+                            <span class="method-pill">GET</span>
+                        </div>
+                        <h3>Application Status</h3>
+                        <code class="endpoint">/api/status</code>
+                        <p class="card-description">Check the health and version of this application.</p>
+                        <button class="action-button" id="status-button" type="button">
+                            <span>Check application status</span><span aria-hidden="true">→</span>
+                        </button>
+                        <div class="response-panel" id="status-response" aria-live="polite">
+                            <div class="response-heading"><span class="response-dot"></span> RESPONSE</div>
+                            <p class="response-placeholder">Your response will appear here.</p>
+                        </div>
+                    </article>
+                </div>
+            </section>
+
+            <section class="pipeline-section" aria-labelledby="pipeline-heading">
+                <div class="section-heading pipeline-heading">
+                    <div>
+                        <span class="section-kicker">FROM CODE TO DELIVERY</span>
+                        <h2 id="pipeline-heading">What happens in CI/CD?</h2>
+                    </div>
+                    <span class="section-note">A quick tour of this project</span>
+                </div>
+                <div class="pipeline-grid">
+                    <article class="pipeline-step">
+                        <span class="step-number">01</span>
+                        <span class="step-icon" aria-hidden="true">✓</span>
+                        <h3>Automated tests</h3>
+                        <p>JUnit and MockMvc check the code and API responses on every change.</p>
+                    </article>
+                    <article class="pipeline-step">
+                        <span class="step-number">02</span>
+                        <span class="step-icon" aria-hidden="true">⌘</span>
+                        <h3>GitHub Actions</h3>
+                        <p>Workflows build the project and run tests when code is pushed or a PR opens.</p>
+                    </article>
+                    <article class="pipeline-step">
+                        <span class="step-number">03</span>
+                        <span class="step-icon" aria-hidden="true">▣</span>
+                        <h3>Docker build</h3>
+                        <p>After successful CI on main, a container image is published to GHCR.</p>
+                    </article>
+                    <article class="pipeline-step">
+                        <span class="step-number">04</span>
+                        <span class="step-icon" aria-hidden="true">◉</span>
+                        <h3>Canary demo</h3>
+                        <p>A small local script simulates sending some requests to a new version.</p>
+                    </article>
+                </div>
+                <p class="simulation-note"><span aria-hidden="true">ⓘ</span> Canary routing in this project is a local simulation, not a production load balancer.</p>
+            </section>
+        </main>
+
+        <footer class="footer">
+            <span><span class="footer-mark" aria-hidden="true">✳</span> Built for Experiment 3.2.1</span>
+            <span>Plain HTML, CSS &amp; JavaScript <span class="footer-separator">·</span> Powered by Spring Boot</span>
+        </footer>
+    </div>
+</body>
+</html>

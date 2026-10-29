@@ -1,0 +1,6 @@
+com\example\cicddemo\CiCdDemoApplication.class
+com\example\cicddemo\HelloController.class
+com\example\cicddemo\HelloService.class
+com\example\cicddemo\StatusResponse.class
+com\example\cicddemo\StatusController.class
+com\example\cicddemo\StatusService.class
